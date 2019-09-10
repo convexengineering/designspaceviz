@@ -6,7 +6,6 @@ from matplotlib.patches import Polygon
 from matplotlib import pyplot as plt
 from gpkit import Model, Variable, ConstraintSet, GPCOLORS, GPBLU
 from gpkit.small_scripts import mag
-from robust.robust_gp_tools import RobustGPTools
 
 
 def plot_feasibilities(x, y, m, rm=None, iterate=False, skipfailures=False, numberofsweeps=150):
@@ -37,6 +36,7 @@ def plot_feasibilities(x, y, m, rm=None, iterate=False, skipfailures=False, numb
     rmtype = None
     if rm:
         rmtype = rm.type_of_uncertainty_set
+        from robust.robust_gp_tools import RobustGPTools
 
     # posynomials = m.as_posyslt1()
     # old = []
@@ -57,7 +57,7 @@ def plot_feasibilities(x, y, m, rm=None, iterate=False, skipfailures=False, numb
             for count in range((len(interesting_vars) - 1)):
                 th = Variable("\\theta_%s" % count, angles, "-") if angles is not None else Variable("\\theta_%s" % count, np.linspace(0, 2 * np.pi, numberofsweeps), "-")
                 thetas += [th]
-            for i_set in range(len(interesting_vars)):
+            for i_set, var in enumerate(interesting_vars):
                 if rob:
                     eta_min_x, eta_max_x = RobustGPTools.generate_etas(interesting_vars[i_set])
                 else:
@@ -88,12 +88,8 @@ def plot_feasibilities(x, y, m, rm=None, iterate=False, skipfailures=False, numb
                 slacks += [s_i]
 
                 uncertaintyset = Variable('uncertaintyset_%s' % i_set, g)
-                var = RobustGPTools.variables_bynameandmodels(m, **interesting_vars[i_set].key.descr)
-
-                if len(var) > 1:
+                if var.key.shape:
                     raise ValueError("vector uncertain variables are not supported yet")
-                else:
-                    var = var[0]
 
                 additional_constraints += [s_i >= 1, s_i <= uncertaintyset*1.000001, var / s_i <= x_i, x_i <= var * s_i]
 
