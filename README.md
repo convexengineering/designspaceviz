@@ -8,12 +8,12 @@ Given a GPkit model, this repository will visualize its solution to allow for be
 ```python
 plot_feasibilities(x, y, m, [rm, iterate, design_feasibility, skipfailures, numberofsweeps])
 ```
-x = GPkit variable to plot on the x axis
-y = GPkit variable to plot on the y axis
-rm = Robust Model, if it exists (defaults to None)
-iterate = Boolean of whether or not to use an iterated plot to a specific resolution (defaults to False)
-skipfailures = Boolean of whether or not to skip errors during sweeps (defaults to False)
-numberofsweeps = Integer number of points used to approximate the design space. If iterate = True, then this is the starting number of points.
+x = GPkit variable to plot on the x axis  
+y = GPkit variable to plot on the y axis  
+rm = Robust Model, if it exists (defaults to None)  
+iterate = Boolean of whether or not to use an iterated plot to a specific resolution (defaults to False)  
+skipfailures = Boolean of whether or not to skip errors during sweeps (defaults to False)  
+numberofsweeps = Integer number of points used to approximate the design space. If iterate = True, then this is the starting number of points.  
 
 ![](normal.png)
 *Example design space of a normal model*
