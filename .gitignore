@@ -68,6 +68,9 @@ docs/_build/
 test_reports/
 test_reports_nounits/
 
+# Test image outputs
+test_figs/
+
 # MacOSX
 *.DS_Store
 

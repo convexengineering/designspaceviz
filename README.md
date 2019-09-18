@@ -6,10 +6,9 @@ Given a GPkit model, this repository will visualize its solution to allow for be
 ## Usage
 
 ```python
-plot_feasibilities(x, y, m, [rm, iterate, design_feasibility, skipfailures, numberofsweeps])
+plot_feasibilities(axisvariables, m, [rm, iterate, design_feasibility, skipfailures, numberofsweeps])
 ```
-x = GPkit variable to plot on the x axis  
-y = GPkit variable to plot on the y axis  
+axisvariables = GPkit variables to plot (first x, then y)
 rm = Robust Model, if it exists (defaults to None)  
 iterate = Boolean of whether or not to use an iterated plot to a specific resolution (defaults to False)  
 skipfailures = Boolean of whether or not to skip errors during sweeps (defaults to False)  

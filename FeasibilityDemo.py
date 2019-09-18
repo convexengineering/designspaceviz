@@ -1,8 +1,5 @@
-from __future__ import print_function
-from __future__ import absolute_import
 from gpkit import Variable, Model
 import numpy as np
-
 from robust.robust import RobustModel
 from plot_feasibilities import plot_feasibilities
 
@@ -62,10 +59,18 @@ m = Model(D, constraints)
 sol = m.solve()
 
 
-def plot_feasibility_simple_Wing(type_of_uncertainty_set, x, y, str1, val1, str2, val2):
-    plot_feasibilities(x, y, m)
-    x.key.descr[str1] = val1
-    y.key.descr[str2] = val2
+def plot_feasibility_simple_Wing(type_of_uncertainty_set, axisvars, str1, val1, str2, val2, saveimg=False):
+    if saveimg:
+        x_name = axisvars[0].key.descr["name"]
+        y_name = axisvars[1].key.descr["name"]
+        for inval_chars in ["\\", ",", "{", "}"]:
+            x_name = x_name.replace(inval_chars, "")
+            y_name = y_name.replace(inval_chars, "")
+    orig_plt = plot_feasibilities(axisvars, m)
+    if saveimg:
+        orig_plt.savefig("test_figs/%s_orig_%s_%s.png" % (type_of_uncertainty_set, x_name, y_name))
+    axisvars[0].key.descr[str1] = val1
+    axisvars[1].key.descr[str2] = val2
     RM = RobustModel(m, type_of_uncertainty_set, linearizationTolerance=1e-4)
     RMsol = RM.robustsolve(verbosity=0, minNumOfLinearSections=20, maxNumOfLinearSections=40)
     print("nominal: ", {k: v for k, v in list(sol["freevariables"].items())
@@ -73,36 +78,28 @@ def plot_feasibility_simple_Wing(type_of_uncertainty_set, x, y, str1, val1, str2
     print("robust: ", {k: v for k, v in list(RMsol["freevariables"].items())
                        if k in m.varkeys and k.key.fix is True})
     print('cost', RMsol['cost'])
-    plot_feasibilities(x, y, m, RM, numberofsweeps=120, skipfailures=True)
-    del x.key.descr[str1]
-    del y.key.descr[str2]
+    robust_plt = plot_feasibilities(axisvars, m, RM, numberofsweeps=120, skipfailures=True)
+    if saveimg:
+        robust_plt.savefig("test_figs/%s_robust_%s_%s.png" % (type_of_uncertainty_set, x_name, y_name))
+    del axisvars[0].key.descr[str1]
+    del axisvars[1].key.descr[str2]
 
 
 if __name__ == "__main__":
-    # plot_feasibility_simple_Wing('elliptical', W_0, W_W_coeff2, 'r', 1.6, 'r', 1.66, True)
-    # plot_feasibility_simple_Wing('elliptical', W_0, W_W_coeff2, 'r', 1.6, 'r', 1.66, False)
-    # plot_feasibility_simple_Wing('box', W_0, W_W_coeff2, 'pr', 60, 'pr', 66, True)
-    # plot_feasibility_simple_Wing('box', W_0, W_W_coeff2, 'pr', 60, 'pr', 66, False)
+    # plot_feasibility_simple_Wing('elliptical', [W_0, W_W_coeff2], 'r', 1.6, 'r', 1.66)
+    # plot_feasibility_simple_Wing('box', [W_0, W_W_coeff2], 'pr', 60, 'pr', 66)
 
-    # plot_feasibility_simple_Wing('elliptical', W_W_coeff1, W_W_coeff2, 'r', 1.6, 'r', 1.66, True)
-    # plot_feasibility_simple_Wing('elliptical', W_W_coeff1, W_W_coeff2, 'r', 1.6, 'r', 1.66, False)
-    # plot_feasibility_simple_Wing('box', W_W_coeff1, W_W_coeff2, 'pr', 60, 'pr', 66, True)
-    # plot_feasibility_simple_Wing('box', W_W_coeff1, W_W_coeff2, 'pr', 60, 'pr', 66, False)
+    # plot_feasibility_simple_Wing('elliptical', [W_W_coeff1, W_W_coeff2], 'r', 1.6, 'r', 1.66)
+    # plot_feasibility_simple_Wing('box', [W_W_coeff1, W_W_coeff2], 'pr', 60, 'pr', 66)
 
-    plot_feasibility_simple_Wing('elliptical', C_Lmax, V_min, 'r', 1.25, 'r', 1.2)
-    plot_feasibility_simple_Wing('box', C_Lmax, V_min, 'pr', 25, 'pr', 20)
+    # plot_feasibility_simple_Wing('elliptical', [C_Lmax, V_min], 'r', 1.25, 'r', 1.2)
+    # plot_feasibility_simple_Wing('box', [C_Lmax, V_min], 'pr', 25, 'pr', 20)
 
-    # plot_feasibility_simple_Wing('elliptical', dummy, e, 'r', 1.12, 'r', 1.31, True)
-    # plot_feasibility_simple_Wing('elliptical', dummy, e, 'r', 1.12, 'r', 1.31, False)
-    # plot_feasibility_simple_Wing('box', dummy, e, 'pr', 12, 'pr', 31, True)
-    # plot_feasibility_simple_Wing('box', dummy, e, 'pr', 12, 'pr', 31, False)
+    # plot_feasibility_simple_Wing('elliptical', [dummy, e], 'r', 1.12, 'r', 1.31)
+    # plot_feasibility_simple_Wing('box', [dummy, e], 'pr', 12, 'pr', 31)
 
-    # plot_feasibility_simple_Wing('elliptical', rho, dummy, 'r', 1.1, 'r', 1.12, True)
-    # plot_feasibility_simple_Wing('elliptical', rho, dummy, 'r', 1.1, 'r', 1.12, False)
-    # plot_feasibility_simple_Wing('box', rho, dummy, 'pr', 10, 'pr', 12, True)
-    # plot_feasibility_simple_Wing('box', rho, dummy, 'pr', 10, 'pr', 12, False)
+    # plot_feasibility_simple_Wing('elliptical', [rho, dummy], 'r', 1.1, 'r', 1.12)
+    # plot_feasibility_simple_Wing('box', [rho, dummy], 'pr', 10, 'pr', 12)
 
-    # plot_feasibility_simple_Wing('elliptical', rho, W_0, 'r', 1.1, 'r', 1.6, True)
-    # plot_feasibility_simple_Wing('elliptical', rho, W_0, 'r', 1.1, 'r', 1.6, False)
-    # plot_feasibility_simple_Wing('box', rho, W_0, 'r', 1.1, 'r', 1.6, True)
-    # plot_feasibility_simple_Wing('box', rho, W_0, 'r', 1.1, 'r', 1.6, False)
+    plot_feasibility_simple_Wing('elliptical', [rho, W_0], 'r', 1.1, 'r', 1.6)
+    plot_feasibility_simple_Wing('box', [rho, W_0], 'r', 1.1, 'r', 1.6)

@@ -1,22 +1,21 @@
 from __future__ import division
-from builtins import map
-from builtins import range
 import numpy as np
-from matplotlib.patches import Polygon
 from matplotlib import pyplot as plt
-from gpkit import Model, Variable, ConstraintSet, GPCOLORS, GPBLU
+from matplotlib.patches import Polygon
+from gpkit import Model, Variable, ConstraintSet, GPCOLORS, VectorVariable
 from gpkit.small_scripts import mag
 
+GPBLU, GPRED = GPCOLORS[:2]
 
-def plot_feasibilities(x, y, m, rm=None, iterate=False, skipfailures=False, numberofsweeps=150):
+
+def plot_feasibilities(axisvariables, m, rm=None, iterate=False, skipfailures=False,
+                       numberofsweeps=150):
     """ Plots feasibility space over two variables given a model.
 
     Arguments
     ---------
-    x : GPkit Variable (not a vector variable)
-        plotted on the x axis
-    y : GPkit Variable (not a vector variable)
-        plotted on the y axis
+    axisvariables : list of GPkit Variables (not a vector variable) 
+        currently only 2 elements, first plotted on x, second plotted on y
     m : GPkit Model
     rm : GPkit Model (defaults to None)
         robust model, if it exists
@@ -25,83 +24,58 @@ def plot_feasibilities(x, y, m, rm=None, iterate=False, skipfailures=False, numb
     skipfailures : bool (defaults to False)
         whether or not to skip errors during sweeps
     numberofsweeps : int (defaults to 150)
-        number of points used to approximate the design space. If iterate = True, then this is the starting number of points.
+        number of points used to approximate the design space. If iterate=True,
+        then this is the starting number of points.
 
     Raises
     ------
-    ValueError if either x or y is a vector variable
+    ValueError if any of the axisvariables is a vector variable
     
     """
-    interesting_vars = [x, y]
-    rmtype = None
-    if rm:
+    axisvars = np.array(axisvariables)
+    if rm:  # we have a robust model as well as a conventional one
         rmtype = rm.type_of_uncertainty_set
         from robust.robust_gp_tools import RobustGPTools
 
-    # posynomials = m.as_posyslt1()
-    # old = []
-    # while set(old) != set(interesting_vars):
-    #     old = interesting_vars
-    #     for p in posynomials:
-    #         if set([var.key.name for var in interesting_vars]) & set([var.key.name for var in p.varkeys.keys()]):
-    #             interesting_vars = list(set(interesting_vars) | set([m[var.key.name] for var in p.varkeys.keys() if var.key.pr is not None]))
-
     class FeasCircle(Model):
-        """SKIP VERIFICATION"""
+        "Named model that will be swept to get feasibility boundary points."
 
-        def setup(self, m, sol, angles=None, rob=False):
-            r = 4
-            additional_constraints = []
-            slacks = []
-            thetas = []
-            for count in range((len(interesting_vars) - 1)):
-                th = Variable("\\theta_%s" % count, angles, "-") if angles is not None else Variable("\\theta_%s" % count, np.linspace(0, 2 * np.pi, numberofsweeps), "-")
-                thetas += [th]
-            for i_set, var in enumerate(interesting_vars):
-                if rob:
-                    eta_min_x, eta_max_x = RobustGPTools.generate_etas(interesting_vars[i_set])
-                else:
-                    eta_min_x, eta_max_x = 0, 0
-                xo = mag(m.solution(interesting_vars[i_set]))
-                x_center = np.log(xo)
+        def setup(self, m, sol, angles=None):
+            r = 4 # radius of the circle in logspace
+            n_axes = len(axisvars)
+            angles = angles or np.linspace(0, 2 * np.pi, numberofsweeps)
+            thetas = np.array([Variable("\\theta_%s" % i, angles, "-") for i in range(n_axes - 1)])
+            slacks = VectorVariable(n_axes, "s", "-", "slack variables")
+            x = np.array([None]*n_axes, "object")  # filled in the loop below
+            for i, var in enumerate(axisvars):
+                if var.key.shape:
+                    raise ValueError("Uncertain VectorVariables not supported")
+                x_center = np.log(mag(m.solution(axisvars[i])))
 
-                def f(c, index=i_set, x_val=x_center):
+                def f(c, index=i, x_val=x_center):
                     product = 1
                     for j in range(index):
                         product *= np.cos(c[thetas[j]])
-                    if index != len(interesting_vars) - 1:
+                    if index != n_axes - 1: # TODO: should this be indented??
                         product *= np.sin(c[thetas[index]])
                     return np.exp(x_val) * np.exp(r * product)
                 
-                def g(c, index=i_set, x_val=x_center, x_nom=xo, eta=eta_max_x):
-                    product = 1
-                    for j in range(index):
-                        product *= np.cos(c[thetas[j]])
-                    if index != len(interesting_vars) - 1:
-                        product *= np.sin(c[thetas[index]])
-                    if rmtype == 'box':
-                        return np.exp(max(r*np.abs(product) - (np.log(x_nom) + eta - x_val), 0))
-                    return np.exp(np.abs((np.log(x_nom) + eta - x_val - r)*product))
-                
-                x_i = Variable('x_%s' % i_set, f, interesting_vars[i_set].unitstr())
-                s_i = Variable("s_%s" % i_set)
-                slacks += [s_i]
-
-                uncertaintyset = Variable('uncertaintyset_%s' % i_set, g)
-                if var.key.shape:
-                    raise ValueError("vector uncertain variables are not supported yet")
-
-                additional_constraints += [s_i >= 1, s_i <= uncertaintyset*1.000001, var / s_i <= x_i, x_i <= var * s_i]
+                x[i] = Variable('x_%s' % i, f, axisvars[i].unitstr())
+            
+            constraints = [(slacks >= 1),
+                          (axisvars/slacks <= x),
+                          (axisvars*slacks >= x)]
 
             cost_ref = Variable('cost_ref', 1, m.cost.unitstr(), "reference cost")
-            self.cost = sum([sl ** 2 for sl in slacks]) * m.cost / cost_ref
-            feas_slack = ConstraintSet(additional_constraints)
-            return [m, feas_slack], {k: v for k, v in list(sol["freevariables"].items())
-                if k in m.varkeys and k.key.fix is True}
-    
+            self.cost = (slacks**2).sum() * m.cost / cost_ref
+            slack_constr = ConstraintSet(constraints)
+            return ({"original model": m, "slack constraints": slack_constr},
+                {k: v for k, v in list(sol["freevariables"].items())
+                if k in m.varkeys and k.key.fix is True})
+
     def slope(a, b):
         if a[0] == b[0]:
-            return 10e10 # arbitrarily large number
+            return 1e10  # arbitrarily large number. TODO: if np.inf, modify arithmetic in angle to account for possibility
         return (b[1]-a[1])/(b[0]-a[0])
 
     def distance(a, b):
@@ -122,8 +96,8 @@ def plot_feasibilities(x, y, m, rm=None, iterate=False, skipfailures=False, numb
         while bounds:
             angles = spacing if first else [(bound[0]+bound[1])/2 for bound in bounds]
             fc = FeasCircle(m, sol, angles=angles, rob=rob)
-            for interesting_var in interesting_vars:
-                del fc.substitutions[interesting_var]
+            for axisvar in axisvars:
+                del fc.substitutions[axisvar]
             feas = fc.solve(skipsweepfailures=skipfailures)
 
             p, q = list(map(mag, list(map(feas, [x, y]))))
@@ -173,8 +147,7 @@ def plot_feasibilities(x, y, m, rm=None, iterate=False, skipfailures=False, numb
         b = [solved_angles[angle][1] for angle in angles]
         return a, b
 
-    # plot original feasibility set
-    # plot boundary of uncertainty set
+    # plot original feasibility set and boundary of uncertainty set
     orig_a, orig_b, a, b = [None] * 4
     if iterate:
         if rm:
@@ -182,25 +155,25 @@ def plot_feasibilities(x, y, m, rm=None, iterate=False, skipfailures=False, numb
         orig_a, orig_b = iterate_angles()
     else:
         if rm:
-            fc = FeasCircle(m, rm.get_robust_model().solution, rob=True)
-            for interesting_var in interesting_vars:
-                del fc.substitutions[interesting_var]
+            fc = FeasCircle(m, rm.get_robust_model().solution)
+            for axisvar in axisvars:
+                del fc.substitutions[axisvar]
             rmfeas = fc.solve(skipsweepfailures=skipfailures)
-            a, b = list(map(mag, list(map(rmfeas, [x, y]))))
+            a, b = list(map(mag, list(map(rmfeas, axisvars))))
         ofc = FeasCircle(m, m.solution)
-        for interesting_var in interesting_vars:
-            del ofc.substitutions[interesting_var]
+        for axisvar in axisvars:
+            del ofc.substitutions[axisvar]
         origfeas = ofc.solve(skipsweepfailures=skipfailures)
-        orig_a, orig_b = list(map(mag, list(map(origfeas, [x, y]))))
+        orig_a, orig_b = list(map(mag, list(map(origfeas, axisvars))))
 
     fig, axes = plt.subplots(2)
 
     def plot_uncertainty_set(ax):
-        xo, yo = list(map(mag, list(map(m.solution, [x, y]))))
+        xo, yo = list(map(mag, list(map(m.solution, axisvars))))
         ax.plot(xo, yo, "k.")
         if rm:
-            eta_min_x, eta_max_x = RobustGPTools.generate_etas(x)
-            eta_min_y, eta_max_y = RobustGPTools.generate_etas(y)
+            eta_min_x, eta_max_x = RobustGPTools.generate_etas(axisvars[0])
+            eta_min_y, eta_max_y = RobustGPTools.generate_etas(axisvars[1])
             x_center = np.log(xo)
             y_center = np.log(yo)
             ax.plot(np.exp(x_center), np.exp(y_center), "kx")
@@ -217,7 +190,7 @@ def plot_feasibilities(x, y, m, rm=None, iterate=False, skipfailures=False, numb
                 ax.add_patch(p)
 
     if rm:
-        axes[0].loglog([a[0]], [b[0]], color=GPCOLORS[1], linewidth=0.2)
+        axes[0].loglog([a[0]], [b[0]], color=GPRED, linewidth=0.2)
     else:
         axes[0].loglog([orig_a[0]], [orig_b[0]], "k-")
 
@@ -229,17 +202,17 @@ def plot_feasibilities(x, y, m, rm=None, iterate=False, skipfailures=False, numb
 
     if rm:
         perimeter = np.array([a, b]).T
-        p = Polygon(perimeter, True, color=GPCOLORS[1], alpha=0.5, linewidth=0)
+        p = Polygon(perimeter, True, color=GPRED, alpha=0.5, linewidth=0)
         axes[0].add_patch(p)
-        p = Polygon(perimeter, True, color=GPCOLORS[1], alpha=0.5, linewidth=0)
+        p = Polygon(perimeter, True, color=GPRED, alpha=0.5, linewidth=0)
         axes[1].add_patch(p)
 
     plot_uncertainty_set(axes[0])
     axes[0].axis("equal")
-    axes[0].set_ylabel(y)
+    axes[0].set_ylabel(axisvars[1])
     plot_uncertainty_set(axes[1])
-    axes[1].set_xlabel(x)
-    axes[1].set_ylabel(y)
+    axes[1].set_xlabel(axisvars[0])
+    axes[1].set_ylabel(axisvars[1])
 
-    fig.suptitle("%s vs %s Feasibility Space" % (x, y))
-    plt.show()
+    fig.suptitle("%s vs %s Feasibility Space" % (axisvars[0], axisvars[1]))
+    return plt

@@ -13,13 +13,13 @@ class TestFeasibilityDemo(unittest.TestCase):
     def test_elliptical(self):
         if settings["default_solver"] == "cvxopt":
             return
-        plot_feasibility_simple_Wing('elliptical', C_Lmax, V_min,
+        plot_feasibility_simple_Wing('elliptical', [C_Lmax, V_min],
                                      'r', 1.25, 'r', 1.2)
 
     def test_box(self):
         if settings["default_solver"] == "cvxopt":
             return
-        plot_feasibility_simple_Wing('box', C_Lmax, V_min,
+        plot_feasibility_simple_Wing('box', [C_Lmax, V_min],
                                      'pr', 25, 'pr', 20)
 
 
